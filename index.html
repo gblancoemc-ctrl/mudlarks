@@ -85,20 +85,20 @@ a{color:var(--teal)}
 
   <div class="card" id="startCard">
     <h2>Before you start</h2>
-    <p style="margin:0 0 12px">Your clock starts when your team validates the first code and stops at the last one. You earn a mudlark for each clue. Tie-break is time.</p>
+    <p style="margin:0 0 12px">Your clock starts when your team solves the first clue and stops at the last one. You earn a mudlark for each clue. Tie-break is time.</p>
     <button onclick="startTeam()">We are ready</button>
   </div>
 
   <div class="card">
     <h2>Your clue</h2>
-    <div id="hint">Find the host at the starting point and scan their code.</div>
+    <div id="hint">Find the host at the starting point. They give you the first clue and the route.</div>
     <div id="msg"></div>
   </div>
 
   <div class="card" id="entryCard">
-    <h2>Enter a code</h2>
-    <input id="code" placeholder="ABC123" autocomplete="off" autocapitalize="characters" spellcheck="false">
-    <button onclick="check()">Check code</button>
+    <h2>Your answer</h2>
+    <input id="code" placeholder="your answer" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <button onclick="check()">Check answer</button>
   </div>
 
   <div class="card">
@@ -137,16 +137,21 @@ a{color:var(--teal)}
 // pts = mudlarks que vale cada pista.
 // ---------------------------------------------------------------------------
 const ROUTE = [
-  { code:"MAIDEN",   name:"Maiden Lane",     site:"WC2E 7NA", lat:51.51025, lon:-0.12341, pts:1,
-    clue:"The lane is named after a shop sign, not after a person. Find the plaque that mentions the theatre which stood on this corner, and read the year." },
-  { code:"MERCER",   name:"Mercer Walk",     site:"WC2H 9FA", lat:51.51301, lon:-0.12535, pts:2,
-    clue:"A shop that sells places. Look at the map in the window: find a country whose capital begins with the same letter as this street." },
-  { code:"SEVEN",    name:"Seven Dials",     site:"WC2H 9LX", lat:51.51403, lon:-0.12605, pts:2,
-    clue:"Seven streets meet under a column with sundials. There is an inscription at the base. Tell us what it says about the number of hours." },
-  { code:"MONMOUTH", name:"Monmouth Street", site:"WC2H 9EW", lat:51.51394, lon:-0.12685, pts:2,
-    clue:"Monmouth was a person before it was a street. Find the old shopfront that still carries its original painted lettering above the door." },
-  { code:"ROSE",     name:"Rose Street",     site:"WC2E 9EB", lat:51.51172, lon:-0.12566, pts:3,
-    clue:"Last one. A pub older than the street sign, with a lantern by the door. The code is under the left-hand lantern." },
+  { name:"Bedford Chambers", site:"North side of the piazza", pts:1,
+    clue:"You are on the square Inigo Jones laid out in the 1630s, the first modern square in London. Walk the north side and find the building rebuilt in 1877. Its name is carved over the arch. Type it as one word.",
+    answers:["bedfordchambers"] },
+  { name:"St Paul's portico", site:"Bedford Street, WC2E 9ED", pts:2,
+    clue:"West of the square stands the 1633 church, the actors' church, whose portico faces the piazza. Read the inscription above the main door and type the saint's name, one word.",
+    answers:["stpaul","saintpaul","stpauls","saintpauls","paul"] },
+  { name:"Apple Market", site:"Central market building", pts:2,
+    clue:"Go into the central market building (public and free). Find the aisle of craft stalls. The sign naming it has two words and the first is a fruit. Type that fruit.",
+    answers:["apple","applemarket"] },
+  { name:"Jubilee Hall", site:"South side of the piazza", pts:2,
+    clue:"Leave the piazza to the south. There is a 1904 hall with another market inside. Its name commemorates a jubilee. Type one word.",
+    answers:["jubilee","jubileehall","jubileemarket"] },
+  { name:"Seven Dials", site:"WC2H 9LX", pts:3,
+    clue:"Last one. Seven streets meet under a column with sundials. Read the inscription at the base and type the number of hours it mentions, in digits.",
+    answers:["24","twentyfour"] },
 ];
 
 const PRIZE_CODE = "MUDLARK-2026";
@@ -154,7 +159,7 @@ const KEY = "mudlarks.v1";
 
 function now(){ return Date.now(); }
 function fmt(ms){
-  if (!ms || ms < 0) return "—";
+  if (ms === null || ms === undefined || ms < 0) return "—";
   const s = Math.floor(ms/1000);
   return String(Math.floor(s/60)).padStart(2,"0") + ":" + String(s%60).padStart(2,"0");
 }
@@ -209,14 +214,19 @@ function render(){
   }).join("");
 }
 
+function normalize(v){
+  return (v || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 function check(){
-  const raw = (document.getElementById("code").value || "").trim().toUpperCase();
+  const raw = normalize(document.getElementById("code").value);
   const msg = document.getElementById("msg");
   const s = state();
   const i = Math.min(s.i, ROUTE.length);
   if (i >= ROUTE.length) return;
 
-  if (raw === ROUTE[i].code) {
+  const stop = ROUTE[i];
+  if (stop.answers.indexOf(raw) !== -1) {
     s.i = i + 1;
     if (!s.t0) s.t0 = now();
     if (s.i >= ROUTE.length) s.t1 = now();
@@ -224,13 +234,12 @@ function check(){
     document.getElementById("code").value = "";
     render();
     msg.className = "msg ok";
-    msg.textContent = "Correct. +" + ROUTE[i].pts + " mudlarks.";
+    msg.textContent = "Correct. +" + stop.pts + " mudlarks.";
   } else {
-    const anywhere = ROUTE.findIndex(function(st){ return st.code === raw; });
     msg.className = "msg err";
-    if (anywhere === -1) msg.textContent = "Not a code from this quest.";
-    else if (anywhere > i) msg.textContent = "That is a later clue. You are on clue " + (i+1) + ".";
-    else msg.textContent = "Already used.";
+    msg.textContent = raw.length < 2
+      ? "Type the answer you found on the plaque."
+      : "Not that one. Read the clue again — it tells you exactly what to look for.";
   }
 }
 
