@@ -1,0 +1,253 @@
+<!doctype html>
+<!--
+  MUDLARKS — búsqueda del tesoro con QR en Covent Garden
+  Fichero unico, sin backend, sin cookies. Hosteable en GitHub Pages.
+
+  MECANICA
+  1. El anfitrion esta en el punto de salida con un QR. Los equipos lo escanean.
+  2. Cada pista resuelta vale un "mudlark" (punto). Se gana jugando.
+  3. El cronometro arranca al validar el primer codigo y para al validar el ultimo.
+  4. Los mudlarks NO se compran, NO hay saldo, NO hay cartera, NO se transfieren.
+     Se canjean por un pin fisico y un descuento en la siguiente edicion.
+
+  LIMITACIONES REALES
+  - Los codigos son publicos: cualquiera puede compartir la URL. Rotar cada edicion.
+  - localStorage se borra facil. Es una experiencia, no un anti-trampas.
+  - Sin backend no hay cupo ni validacion de pago: se cobra en efectivo en la salida.
+  - Las fotos son OPCIONALES. Si se hacen obligatorias sin consentimiento, hay
+    problema de derechos de imagen.
+-->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mudlarks — Covent Garden</title>
+<meta name="description" content="Five clues around Covent Garden. Earn a mudlark for each one. Self-guided, teams of three.">
+<style>
+:root{--navy:#0e2233;--teal:#0f7a72;--paper:#f7f5f0;--ink:#1b2833;--muted:#5a6b78;--line:#d9d4ca;--amber:#c8842a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+.wrap{max-width:560px;margin:0 auto;padding:22px 20px 56px}
+header{background:var(--navy);color:#eaf0f4;padding:13px 0;position:sticky;top:0;z-index:5}
+header .wrap{padding:0 20px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.mark{font-weight:700;letter-spacing:.08em;font-size:14px}
+.mark i{display:inline-block;width:9px;height:9px;background:var(--teal);border-radius:2px;margin-right:8px}
+.hud{display:flex;gap:15px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:#9fb3c0}
+.hud b{display:block;font-size:15px;color:#fff;letter-spacing:0;text-transform:none;font-variant-numeric:tabular-nums}
+h1{font-size:27px;line-height:1.15;margin:20px 0 6px;letter-spacing:-.015em}
+.sub{color:var(--muted);margin:0 0 16px;font-size:15px}
+.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:17px;margin:15px 0}
+.card h2{font-size:12.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin:0 0 10px;font-weight:700}
+#hint{font-size:16.5px;line-height:1.5}
+#hint strong{display:block;font-size:19px;margin:6px 0 4px}
+.pill{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;padding:3px 9px;border-radius:999px;background:#e6f2f0;color:#0b5c56}
+.pill.win{background:#fbf1e2;color:#7a4d12}
+input,button{font:inherit}
+input{width:100%;padding:13px 14px;border:1px solid #c9c3b8;border-radius:8px;background:#fff;text-transform:uppercase;letter-spacing:.12em;text-align:center}
+button{width:100%;margin-top:9px;padding:14px 18px;border:0;border-radius:8px;background:var(--teal);color:#fff;font-weight:700}
+button:active{transform:translateY(1px)}
+.stops{list-style:none;padding:0;margin:0}
+.stops li{display:flex;gap:9px;align-items:flex-start;padding:9px 0;border-bottom:1px dashed var(--line);font-size:14px}
+.stops li:last-child{border-bottom:0}
+.stops .n{flex:0 0 22px;height:22px;border-radius:50%;background:#eceff1;color:#5b6b78;display:grid;place-items:center;font-size:11px;font-weight:700}
+.stops li.on .n{background:var(--teal);color:#fff}
+.stops .t{color:var(--muted);font-size:12px}
+.stops .pts{margin-left:auto;font-weight:700;color:var(--amber);font-size:12px;white-space:nowrap}
+.map{width:100%;height:225px;border:0;border-radius:8px}
+code.prize{display:block;font-family:ui-monospace,Menlo,monospace;font-size:19px;letter-spacing:.12em;background:#fbf1e2;border:1px dashed var(--amber);border-radius:8px;padding:13px;text-align:center;color:#7a4d12;margin-top:10px}
+.msg{padding:10px 12px;border-radius:8px;font-size:14px;margin:10px 0}
+.msg.err{background:#fdecea;color:#8a2a20}
+.msg.ok{background:#e6f2f0;color:#0b5c56}
+.rules{font-size:13px;color:#425563}
+.rules b{color:#7a4d12}
+.rules li{margin-bottom:7px}
+footer{margin-top:28px;font-size:11.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:13px}
+a{color:var(--teal)}
+.note{font-size:12.5px;color:var(--muted);margin:10px 0 0}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="mark"><i></i> MUDLARKS</div>
+    <div class="hud">
+      <div>Mudlarks<b id="pts">0</b></div>
+      <div>Time<b id="clock">—</b></div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h1>Five clues. Two hours. One set of mudlarks.</h1>
+  <p class="sub">Covent Garden · teams of three · self-guided, no app to install</p>
+
+  <div class="card" id="startCard">
+    <h2>Before you start</h2>
+    <p style="margin:0 0 12px">Your clock starts when your team validates the first code and stops at the last one. You earn a mudlark for each clue. Tie-break is time.</p>
+    <button onclick="startTeam()">We are ready</button>
+  </div>
+
+  <div class="card">
+    <h2>Your clue</h2>
+    <div id="hint">Find the host at the starting point and scan their code.</div>
+    <div id="msg"></div>
+  </div>
+
+  <div class="card" id="entryCard">
+    <h2>Enter a code</h2>
+    <input id="code" placeholder="ABC123" autocomplete="off" autocapitalize="characters" spellcheck="false">
+    <button onclick="check()">Check code</button>
+  </div>
+
+  <div class="card">
+    <h2>Route</h2>
+    <ul class="stops" id="stops"></ul>
+    <p class="note">About 1 km in total, roughly 12 minutes of walking between stops. The time is in the clues, not the distance.</p>
+  </div>
+
+  <div class="card">
+    <h2>Map</h2>
+    <iframe class="map" loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox=-0.1315%2C51.5082%2C-0.1205%2C51.5162&layer=mapnik&marker=51.5130%2C-0.1253"></iframe>
+    <p class="note">Map not loading? <a href="https://www.openstreetmap.org/#map=17/51.5126/-0.1254" target="_blank" rel="noopener">Open the area in OpenStreetMap</a>.</p>
+  </div>
+
+  <div class="card rules">
+    <h2>The rules, plainly</h2>
+    <ul style="margin:0;padding-left:18px">
+      <li><b>Walk, do not run.</b> Your time is measured, but crossing on red is a disqualification. Covent Garden is full of people.</li>
+      <li><b>Stay on the pavement.</b> Do not block doorways, shop entrances or bus stops.</li>
+      <li><b>Every clue is in public space</b> — plaques, statues, shopfronts, signs. Nothing is inside a venue.</li>
+      <li><b>If you use a cafe's table or toilet, buy something.</b> No venue is paying for this.</li>
+      <li><b>No climbing, no touching, no trespassing.</b> Everything is reachable at eye level from the street.</li>
+      <li><b>Photos are optional.</b> If you post one, use #MudlarksLDN and we may repost it with credit. Message us to have it removed.</li>
+    </ul>
+  </div>
+
+  <footer>
+    One clue solved: one mudlark. Mudlarks are earned by playing and cannot be bought.
+    No balance, no wallet, no transfers. <span id="build"></span>
+  </footer>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// RUTA — editar aqui. Codigos de DEMO: rotar antes de cada edicion de pago.
+// pts = mudlarks que vale cada pista.
+// ---------------------------------------------------------------------------
+const ROUTE = [
+  { code:"MAIDEN",   name:"Maiden Lane",     site:"WC2E 7NA", lat:51.51025, lon:-0.12341, pts:1,
+    clue:"The lane is named after a shop sign, not after a person. Find the plaque that mentions the theatre which stood on this corner, and read the year." },
+  { code:"MERCER",   name:"Mercer Walk",     site:"WC2H 9FA", lat:51.51301, lon:-0.12535, pts:2,
+    clue:"A shop that sells places. Look at the map in the window: find a country whose capital begins with the same letter as this street." },
+  { code:"SEVEN",    name:"Seven Dials",     site:"WC2H 9LX", lat:51.51403, lon:-0.12605, pts:2,
+    clue:"Seven streets meet under a column with sundials. There is an inscription at the base. Tell us what it says about the number of hours." },
+  { code:"MONMOUTH", name:"Monmouth Street", site:"WC2H 9EW", lat:51.51394, lon:-0.12685, pts:2,
+    clue:"Monmouth was a person before it was a street. Find the old shopfront that still carries its original painted lettering above the door." },
+  { code:"ROSE",     name:"Rose Street",     site:"WC2E 9EB", lat:51.51172, lon:-0.12566, pts:3,
+    clue:"Last one. A pub older than the street sign, with a lantern by the door. The code is under the left-hand lantern." },
+];
+
+const PRIZE_CODE = "MUDLARK-2026";
+const KEY = "mudlarks.v1";
+
+function now(){ return Date.now(); }
+function fmt(ms){
+  if (!ms || ms < 0) return "—";
+  const s = Math.floor(ms/1000);
+  return String(Math.floor(s/60)).padStart(2,"0") + ":" + String(s%60).padStart(2,"0");
+}
+function state(){
+  try { return JSON.parse(localStorage.getItem(KEY)) || {i:0,t0:null,t1:null}; }
+  catch(e) { return {i:0,t0:null,t1:null}; }
+}
+function save(s){ localStorage.setItem(KEY, JSON.stringify(s)); }
+function total(s){ return ROUTE.reduce(function(a,st){ return a + st.pts; }, 0); }
+function earned(s){
+  return ROUTE.slice(0, Math.min(s.i, ROUTE.length)).reduce(function(a,st){ return a + st.pts; }, 0);
+}
+
+function startTeam(){
+  const s = state();
+  s.t0 = s.t0 || now();
+  save(s);
+  document.getElementById("startCard").style.display = "none";
+  render();
+}
+
+function render(){
+  const s = state();
+  const i = Math.min(s.i, ROUTE.length);
+  document.getElementById("pts").textContent = earned(s) + "/" + total(s);
+  document.getElementById("clock").textContent = s.t0 ? fmt((s.t1 || now()) - s.t0) : "—";
+
+  const hint = document.getElementById("hint");
+  const entry = document.getElementById("entryCard");
+  const msg = document.getElementById("msg");
+  msg.innerHTML = "";
+
+  if (i >= ROUTE.length) {
+    hint.innerHTML = '<span class="pill win">Finished</span>' +
+      "<strong>" + earned(s) + " of " + total(s) + " mudlarks</strong>" +
+      "Time: " + fmt(s.t1 - s.t0) + ". Show this to the host at the finish to collect your pin." +
+      '<code class="prize">' + PRIZE_CODE + "</code>";
+    entry.style.display = "none";
+  } else {
+    const st = ROUTE[i];
+    hint.innerHTML = '<span class="pill">Clue ' + (i+1) + " of " + ROUTE.length + " · " + st.pts + " mudlarks</span>" +
+      "<strong>" + st.name + "</strong>" + st.clue;
+    entry.style.display = "block";
+  }
+
+  document.getElementById("stops").innerHTML = ROUTE.map(function(st, k){
+    const cls = k < i ? "on" : "";
+    const t = k < i ? "solved" : (k === i ? "next" : "locked");
+    return '<li class="' + cls + '"><span class="n">' + (k+1) + "</span>" +
+      "<span><strong>" + st.name + "</strong><br><span class=\"t\">" + st.site + " · " + t + "</span></span>" +
+      '<span class="pts">+' + st.pts + "</span></li>";
+  }).join("");
+}
+
+function check(){
+  const raw = (document.getElementById("code").value || "").trim().toUpperCase();
+  const msg = document.getElementById("msg");
+  const s = state();
+  const i = Math.min(s.i, ROUTE.length);
+  if (i >= ROUTE.length) return;
+
+  if (raw === ROUTE[i].code) {
+    s.i = i + 1;
+    if (!s.t0) s.t0 = now();
+    if (s.i >= ROUTE.length) s.t1 = now();
+    save(s);
+    document.getElementById("code").value = "";
+    render();
+    msg.className = "msg ok";
+    msg.textContent = "Correct. +" + ROUTE[i].pts + " mudlarks.";
+  } else {
+    const anywhere = ROUTE.findIndex(function(st){ return st.code === raw; });
+    msg.className = "msg err";
+    if (anywhere === -1) msg.textContent = "Not a code from this quest.";
+    else if (anywhere > i) msg.textContent = "That is a later clue. You are on clue " + (i+1) + ".";
+    else msg.textContent = "Already used.";
+  }
+}
+
+setInterval(function(){
+  const s = state();
+  if (s.t0 && !s.t1) document.getElementById("clock").textContent = fmt(now() - s.t0);
+}, 1000);
+
+(function(){
+  const p = new URLSearchParams(location.search);
+  const c = (p.get("c") || "").toUpperCase();
+  if (c) { document.getElementById("code").value = c; check(); }
+  const s = state();
+  if (s.t0) document.getElementById("startCard").style.display = "none";
+  document.getElementById("build").textContent = "· build " + new Date().toISOString().slice(0,10);
+  render();
+})();
+</script>
+</body>
+</html>
